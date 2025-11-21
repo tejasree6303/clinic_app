@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="card" style="margin-top:8px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0">Appointments</h2>
+        <div class="subtle">Browse, search, and update visits</div>
+      </div>
+      <div class="search">
+        <input id="q" placeholder="Quick filter by patient/provider/status…" oninput="filterRows()">
+        <a class="btn" href="{{ url_for('appointments_new') }}">＋ New</a>
+      </div>
+    </div>
+
+    <table id="apptTable">
+      <thead>
+        <tr><th>ID</th><th>Patient</th><th>Provider</th><th>Start</th><th>End</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for a in appts %}
+        <tr>
+          <td>{{ a.appt_id }}</td>
+          <td>{{ a.patient }}</td>
+          <td>{{ a.provider }}</td>
+          <td>{{ a.start_ts }}</td>
+          <td>{{ a.end_ts }}</td>
+          <td>{{ a.status }}</td>
+          <td style="display:flex; gap:8px;">
+            <a class="btn secondary" href="{{ url_for('appointments_edit', appt_id=a.appt_id) }}">Edit</a>
+            <form method="post" action="{{ url_for('appointments_delete', appt_id=a.appt_id) }}">
+              <button class="btn" style="background:linear-gradient(135deg,#fb7185,#ef4444)" onclick="return confirm('Delete this appointment?')">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="subtle">No appointments yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function filterRows(){
+      const q = (document.getElementById('q').value || '').toLowerCase();
+      const rows = document.querySelectorAll('#apptTable tbody tr');
+      rows.forEach(r=>{
+        const txt = r.innerText.toLowerCase();
+        r.style.display = txt.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+{% endblock %}

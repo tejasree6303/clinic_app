@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+{% block content %}
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="card">
+      <h2 style="margin:0 0 6px">Daily Operations Overview</h2>
+      <p class="subtle" style="margin:0">A quick snapshot of clinic revenue and schedule health.</p>
+      <div class="kpis">
+        <div class="card kpi k1">
+          <h3>Total Revenue</h3>
+          <div class="value">${{ '%.2f'|format(kpis.total_revenue|default(0)) }}</div>
+          <div class="hint">All time</div>
+        </div>
+        <div class="card kpi k2">
+          <h3>Appointments</h3>
+          <div class="value">{{ kpis.total_appts|default(0) }}</div>
+          <div class="hint">In database</div>
+        </div>
+        <div class="card kpi k3">
+          <h3>Avg Invoice</h3>
+          <div class="value">${{ '%.2f'|format(kpis.avg_invoice|default(0)) }}</div>
+          <div class="hint">Average per visit</div>
+        </div>
+        <div class="card kpi k4">
+          <h3>Next Visit</h3>
+          <div class="value">{{ kpis.next_appt or '—' }}</div>
+          <div class="hint">Soonest start time</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Status Mix</h3>
+      <canvas id="statusDonut" height="160"
+        data-status='{{ (status_labels|default([]))|tojson|safe }}'
+        data-counts='{{ (status_counts|default([]))|tojson|safe }}'></canvas>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="grid two">
+    <div class="card">
+      <h3 style="margin:0 0 8px">Revenue by Day</h3>
+      <canvas id="rev" height="160"
+        data-labels='{{ (labels|default([]))|tojson|safe }}'
+        data-revenue='{{ (revenue|default([]))|tojson|safe }}'></canvas>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Notes</h3>
+      <ul class="subtle" style="margin:0">
+        <li>Revenue sums <code>invoices.total</code> per appointment day.</li>
+        <li>Status mix shows proportions of scheduled/completed/cancelled.</li>
+        <li>Use <strong>Appointments</strong> to modify the schedule.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Donut
+    {
+      const el = document.getElementById('statusDonut');
+      const labels = JSON.parse(el.dataset.status || '[]');
+      const values = JSON.parse(el.dataset.counts || '[]');
+      new Chart(el.getContext('2d'), {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values }]},
+        options: { plugins:{ legend:{ position:'bottom' } } }
+      });
+    }
+    // Area (revenue)
+    {
+      const el = document.getElementById('rev');
+      const labels = JSON.parse(el.dataset.labels || '[]');
+      const revenue = JSON.parse(el.dataset.revenue || '[]');
+      const ctx = el.getContext('2d');
+      const grad = ctx.createLinearGradient(0,0,0,180);
+      grad.addColorStop(0,'rgba(167,139,250,.35)');
+      grad.addColorStop(1,'rgba(34,211,238,0)');
+      new Chart(ctx, {
+        type:'line',
+        data:{ labels, datasets:[{ label:'Revenue ($)', data:revenue, borderColor:'#8b5cf6', backgroundColor:grad, tension:.35, fill:true, borderWidth:2, pointRadius:3 }]},
+        options:{ plugins:{ legend:{ display:false } }, scales:{ x:{ grid:{ color:'#e5e7eb'}}, y:{ grid:{ color:'#e5e7eb'}}}}
+      });
+    }
+  </script>
+{% endblock %}

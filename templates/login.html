@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="card" style="max-width:720px; margin-top:8px;">
+    <h2 style="margin:0 0 6px">Secure Clinic Access</h2>
+    <p class="subtle" style="margin:0 0 12px">Sign in to manage visits and review performance.</p>
+    <form method="post">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="patient1@example.com">
+      <label>Password</label>
+      <input type="password" name="password" required placeholder="•••••••">
+      <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button type="submit">Sign in</button>
+        <a class="btn secondary" href="#">Forgot?</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="card" style="max-width:780px; margin-top:8px;">
+    <h2 style="margin:0 0 6px">{{ 'Edit' if appt else 'Create' }} Appointment</h2>
+    <p class="subtle" style="margin:0 0 12px">Select a patient and provider, then set the time window.</p>
+    <form method="post">
+      <label>Patient</label>
+      <select name="patient_id" required>
+        {% for p in patients %}
+          <option value="{{ p.user_id }}" {% if appt and appt.patient_id == p.user_id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+
+      <label>Provider</label>
+      <select name="provider_id" required>
+        {% for pr in providers %}
+          <option value="{{ pr.provider_id }}" {% if appt and appt.provider_id == pr.provider_id %}selected{% endif %}>{{ pr.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="grid two">
+        <div>
+          <label>Start (YYYY-MM-DD HH:MM:SS)</label>
+          <input name="start_ts" required value="{{ appt.start_ts if appt }}">
+        </div>
+        <div>
+          <label>End (YYYY-MM-DD HH:MM:SS)</label>
+          <input name="end_ts" required value="{{ appt.end_ts if appt }}">
+        </div>
+      </div>
+
+      <label>Status</label>
+      <input name="status" required value="{{ appt.status if appt else 'scheduled' }}">
+
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <button type="submit">Save</button>
+        <a class="btn secondary" href="{{ url_for('appointments_list') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
