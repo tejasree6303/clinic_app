@@ -1,4 +1,5 @@
 import os, sqlite3
+from services import revenue_by_day, kpis as kpis_service, status_mix
 from flask import Flask, render_template, request, redirect, url_for, flash, g
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required, logout_user
@@ -82,37 +83,16 @@ def logout():
 @login_required
 def dashboard():
     db = get_db()
-    # revenue by day
-    rows = db.execute("""
-        SELECT substr(a.start_ts,1,10) AS day,
-               ROUND(COALESCE(SUM(i.total),0), 2) AS revenue
-        FROM appointments a
-        LEFT JOIN invoices i ON i.appt_id = a.appt_id
-        GROUP BY day
-        ORDER BY day
-        LIMIT 10
-    """).fetchall()
-    labels = [r["day"] for r in rows]
-    revenue = [float(r["revenue"]) for r in rows]
-
-    # KPIs
-    k = {}
-    k["total_revenue"] = db.execute("SELECT ROUND(COALESCE(SUM(total),0),2) FROM invoices").fetchone()[0] or 0
-    k["total_appts"]   = db.execute("SELECT COUNT(*) FROM appointments").fetchone()[0] or 0
-    avg = db.execute("SELECT ROUND(AVG(total),2) FROM invoices").fetchone()[0]
-    k["avg_invoice"]   = avg if avg is not None else 0
-    nxt = db.execute("SELECT MIN(start_ts) FROM appointments WHERE datetime(start_ts) >= datetime('now')").fetchone()[0]
-    k["next_appt"]     = nxt
-
-    # status mix for donut
-    status_rows = db.execute("SELECT status, COUNT(*) AS c FROM appointments GROUP BY status").fetchall()
-    status_labels = [r["status"] for r in status_rows]
-    status_counts = [r["c"] for r in status_rows]
+    # Use service-layer functions (clean separation of concerns)
+    labels, revenue = revenue_by_day(db, limit=10)
+    k = kpis_service(db)
+    status_labels, status_counts = status_mix(db)
 
     return render_template(
         "clinic_dashboard.html",
         title="Clinic Dashboard",
-        labels=labels, revenue=revenue,
+        labels=labels,
+        revenue=revenue,
         kpis=k,
         status_labels=status_labels,
         status_counts=status_counts
