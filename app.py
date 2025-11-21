@@ -63,6 +63,45 @@ def load_user(user_id):
     return User.get_by_id(user_id)
 
 # -------- Routes --------
+from flask import Response  # add to imports if not present
+
+@app.route("/exports/appointments.csv")
+@login_required
+def export_appointments_csv():
+    db = get_db()
+    rows = db.execute("""
+        SELECT
+          a.appt_id,
+          u.name       AS patient,
+          p.name       AS provider,
+          a.start_ts,
+          a.end_ts,
+          a.status,
+          COALESCE(i.total, 0) AS total
+        FROM appointments a
+        JOIN users     u ON u.user_id = a.patient_id
+        JOIN providers p ON p.provider_id = a.provider_id
+        LEFT JOIN invoices i ON i.appt_id = a.appt_id
+        ORDER BY a.start_ts DESC, a.appt_id DESC
+    """).fetchall()
+
+    # Build CSV text
+    headers = ["appt_id","patient","provider","start_ts","end_ts","status","total"]
+    lines = [",".join(headers)]
+    for r in rows:
+        # naive escaping for commas/quotes
+        def cell(x):
+            s = str(x) if x is not None else ""
+            return '"' + s.replace('"', '""') + '"' if ("," in s or '"' in s or " " in s) else s
+        lines.append(",".join([cell(r[h]) for h in headers]))
+    csv_data = "\n".join(lines)
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=appointments.csv"}
+    )
+
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":

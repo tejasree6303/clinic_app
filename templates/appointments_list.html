@@ -39,6 +39,13 @@
     </table>
   </div>
 
+  <div class="search">
+    <input id="q" placeholder="Quick filter by patient/provider/status…" oninput="filterRows()">
+    <a class="btn secondary" href="{{ url_for('export_appointments_csv') }}">Export CSV</a>
+    <a class="btn" href="{{ url_for('appointments_new') }}">＋ New</a>
+  </div>
+
+
   <script>
     function filterRows(){
       const q = (document.getElementById('q').value || '').toLowerCase();
