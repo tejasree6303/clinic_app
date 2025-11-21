@@ -58,3 +58,19 @@ def status_mix(conn: sqlite3.Connection) -> Tuple[List[str], List[int]]:
     labels = [r["status"] for r in rows]
     counts = [r["c"] for r in rows]
     return labels, counts
+
+def daily_summary(conn: sqlite3.Connection, days: int = 14):
+    """
+    Returns a list of dicts: [{day, appts, revenue}], ordered by day ASC.
+    """
+    rows = conn.execute("""
+        SELECT substr(a.start_ts,1,10) AS day,
+               COUNT(a.appt_id)        AS appts,
+               ROUND(COALESCE(SUM(i.total),0), 2) AS revenue
+        FROM appointments a
+        LEFT JOIN invoices i ON i.appt_id = a.appt_id
+        GROUP BY day
+        ORDER BY day
+        LIMIT ?
+    """, (days,)).fetchall()
+    return [{"day": r["day"], "appts": r["appts"], "revenue": float(r["revenue"])} for r in rows]

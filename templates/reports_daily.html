@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+{% block content %}
+  <div class="card" style="margin-top:8px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0">Daily Report</h2>
+        <div class="subtle">Appointments (bars) vs Revenue (line) — last 14 days</div>
+      </div>
+    </div>
+    <canvas id="combo" height="160"
+      data-labels='{{ (labels|default([]))|tojson|safe }}'
+      data-appts='{{ (appts|default([]))|tojson|safe }}'
+      data-revenue='{{ (revenue|default([]))|tojson|safe }}'></canvas>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin:0 0 8px">Detail</h3>
+    <table>
+      <thead><tr><th>Day</th><th>Appointments</th><th>Revenue ($)</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+          <tr><td>{{ r.day }}</td><td>{{ r.appts }}</td><td>{{ '%.2f'|format(r.revenue) }}</td></tr>
+        {% else %}
+          <tr><td colspan="3" class="subtle">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const el = document.getElementById('combo');
+    const labels  = JSON.parse(el.dataset.labels || '[]');
+    const appts   = JSON.parse(el.dataset.appts || '[]');
+    const revenue = JSON.parse(el.dataset.revenue || '[]');
+    const ctx = el.getContext('2d');
+
+    const grad = ctx.createLinearGradient(0,0,0,180);
+    grad.addColorStop(0,'rgba(6,182,212,.35)');
+    grad.addColorStop(1,'rgba(6,182,212,0)');
+
+    new Chart(ctx, {
+      data: {
+        labels,
+        datasets: [
+          { type:'bar', label:'Appointments', data: appts, borderWidth: 0 },
+          { type:'line', label:'Revenue ($)', data: revenue, borderColor:'#06b6d4',
+            backgroundColor:grad, tension:.35, fill:true, borderWidth:2, pointRadius:3 }
+        ]
+      },
+      options: {
+        plugins: { legend: { position:'bottom' } },
+        scales: {
+          x: { grid: { color:'#e5e7eb' } },
+          y: { grid: { color:'#e5e7eb' } }
+        }
+      }
+    });
+  </script>
+{% endblock %}

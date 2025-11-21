@@ -16,6 +16,7 @@
       <nav class="nav">
         <a href="{{ url_for('dashboard') }}" class="{% if title=='Clinic Dashboard' %}active{% endif %}">Overview</a>
         <a href="{{ url_for('appointments_list') }}" class="{% if title=='Appointments' %}active{% endif %}">Appointments</a>
+        <a href="{{ url_for('reports_daily') }}" class="{% if title=='Daily Report' %}active{% endif %}">Reports</a>
         <a href="{{ url_for('logout') }}">Logout</a>
       </nav>
       {% endif %}

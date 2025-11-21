@@ -1,5 +1,6 @@
 import os, sqlite3
 from services import revenue_by_day, kpis as kpis_service, status_mix
+from services import revenue_by_day, kpis as kpis_service, status_mix, daily_summary
 from flask import Flask, render_template, request, redirect, url_for, flash, g
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required, logout_user
@@ -96,6 +97,20 @@ def dashboard():
         kpis=k,
         status_labels=status_labels,
         status_counts=status_counts
+    )
+
+@app.route("/reports/daily")
+@login_required
+def reports_daily():
+    db = get_db()
+    data = daily_summary(db, days=14)
+    labels  = [d["day"] for d in data]
+    appts   = [d["appts"] for d in data]
+    revenue = [d["revenue"] for d in data]
+    return render_template(
+        "reports_daily.html",
+        title="Daily Report",
+        labels=labels, appts=appts, revenue=revenue, rows=data
     )
 # ---------- CRUD: Appointments ----------
 @app.route("/appointments")
