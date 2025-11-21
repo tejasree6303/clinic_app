@@ -19,6 +19,11 @@ app.config["SECRET_KEY"] = SECRET_KEY
 # -------- DB helpers --------
 def get_db():
     if "db" not in g:
+        if not DB_PATH:
+            raise RuntimeError("DB_PATH is not set. Create a .env file (see .env.example).")
+        if not os.path.exists(DB_PATH):
+            raise FileNotFoundError(f"Database file not found at DB_PATH={DB_PATH}. "
+                                    "Open .env and set an absolute path to clinic.db")
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         g.db = conn
