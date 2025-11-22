@@ -1,5 +1,6 @@
 import os, sqlite3
 from services import revenue_by_day, kpis as kpis_service, status_mix
+from db_maintenance import enable_fk, ensure_indexes
 from services import revenue_by_day, kpis as kpis_service, status_mix, daily_summary
 from flask import Flask, render_template, request, redirect, url_for, flash, g
 from flask_login import (
@@ -26,6 +27,8 @@ def get_db():
                                     "Open .env and set an absolute path to clinic.db")
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
+        enable_fk(conn)
+        ensure_indexes(conn)
         g.db = conn
     return g.db
 
