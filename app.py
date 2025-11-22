@@ -1,15 +1,21 @@
 import os, sqlite3
-from services import revenue_by_day, kpis as kpis_service, status_mix
-from db_maintenance import enable_fk, ensure_indexes
-from services import revenue_by_day, kpis as kpis_service, status_mix, daily_summary
-from flask import Flask, render_template, request, redirect, url_for, flash, g
+from datetime import datetime
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, url_for, flash, g, Response
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required, logout_user
 )
 from werkzeug.security import check_password_hash
-from dotenv import load_dotenv
 
-# Load .env (SECRET_KEY, DB_PATH)
+from db_maintenance import enable_fk, ensure_indexes
+from services import revenue_by_day, kpis as kpis_service, status_mix, daily_summary
+
+# ---- Validation helpers ----
+ALLOWED_STATUSES = {"scheduled", "completed", "cancelled"}
+def parse_dt(s: str) -> datetime:
+    return datetime.strptime(s.strip(), "%Y-%m-%d %H:%M:%S")
+
+# ---- Load env (SECRET_KEY, DB_PATH) ----
 load_dotenv()
 DB_PATH = os.getenv("DB_PATH")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
@@ -23,8 +29,10 @@ def get_db():
         if not DB_PATH:
             raise RuntimeError("DB_PATH is not set. Create a .env file (see .env.example).")
         if not os.path.exists(DB_PATH):
-            raise FileNotFoundError(f"Database file not found at DB_PATH={DB_PATH}. "
-                                    "Open .env and set an absolute path to clinic.db")
+            raise FileNotFoundError(
+                f"Database file not found at DB_PATH={DB_PATH}. "
+                "Open .env and set an absolute path to clinic.db"
+            )
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         enable_fk(conn)
@@ -65,9 +73,7 @@ class User(UserMixin):
 def load_user(user_id):
     return User.get_by_id(user_id)
 
-# -------- Routes --------
-from flask import Response  # add to imports if not present
-
+# -------- Exports --------
 @app.route("/exports/appointments.csv")
 @login_required
 def export_appointments_csv():
@@ -88,14 +94,12 @@ def export_appointments_csv():
         ORDER BY a.start_ts DESC, a.appt_id DESC
     """).fetchall()
 
-    # Build CSV text
     headers = ["appt_id","patient","provider","start_ts","end_ts","status","total"]
     lines = [",".join(headers)]
+    def cell(x):
+        s = str(x) if x is not None else ""
+        return '"' + s.replace('"', '""') + '"' if ("," in s or '"' in s or " " in s) else s
     for r in rows:
-        # naive escaping for commas/quotes
-        def cell(x):
-            s = str(x) if x is not None else ""
-            return '"' + s.replace('"', '""') + '"' if ("," in s or '"' in s or " " in s) else s
         lines.append(",".join([cell(r[h]) for h in headers]))
     csv_data = "\n".join(lines)
 
@@ -105,6 +109,7 @@ def export_appointments_csv():
         headers={"Content-Disposition": "attachment; filename=appointments.csv"}
     )
 
+# -------- Auth routes --------
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -127,15 +132,14 @@ def logout():
     logout_user()
     return redirect(url_for("login"))
 
+# -------- Dashboard / Reports --------
 @app.route("/")
 @login_required
 def dashboard():
     db = get_db()
-    # Use service-layer functions (clean separation of concerns)
     labels, revenue = revenue_by_day(db, limit=10)
     k = kpis_service(db)
     status_labels, status_counts = status_mix(db)
-
     return render_template(
         "clinic_dashboard.html",
         title="Clinic Dashboard",
@@ -160,8 +164,9 @@ def reports_daily():
         labels=labels, appts=appts, revenue=revenue, rows=data
     )
 
+# -------- Error pages --------
 @app.errorhandler(404)
-def _404(e):  # noqa: D401
+def _404(e):
     return render_template("error_404.html", title="404"), 404
 
 @app.errorhandler(500)
@@ -190,16 +195,37 @@ def appointments_new():
     patients = db.execute("SELECT user_id, name FROM users ORDER BY user_id").fetchall()
     providers = db.execute("SELECT provider_id, name FROM providers ORDER BY provider_id").fetchall()
     if request.method == "POST":
+        # ---- Validation (Commit #8) ----
         patient_id = request.form["patient_id"]
         provider_id = request.form["provider_id"]
-        start_ts = request.form["start_ts"].strip()
-        end_ts = request.form["end_ts"].strip()
-        status = request.form["status"].strip()
-        db.execute("""INSERT INTO appointments(patient_id, provider_id, start_ts, end_ts, status)
-                      VALUES (?,?,?,?,?)""",
-                   (patient_id, provider_id, start_ts, end_ts, status))
+        start_s = request.form["start_ts"].strip()
+        end_s   = request.form["end_ts"].strip()
+        status  = request.form["status"].strip().lower()
+        try:
+            start = parse_dt(start_s)
+            end   = parse_dt(end_s)
+            assert end > start, "End time must be after start time"
+            assert status in ALLOWED_STATUSES, f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}"
+        except Exception as ex:
+            flash(str(ex))
+            appt = {
+                "patient_id": int(patient_id),
+                "provider_id": int(provider_id),
+                "start_ts": start_s,
+                "end_ts": end_s,
+                "status": status
+            }
+            return render_template("appointment_form.html", title="New Appointment",
+                                   patients=patients, providers=providers, appt=appt)
+
+        db.execute(
+            """INSERT INTO appointments(patient_id, provider_id, start_ts, end_ts, status)
+               VALUES (?,?,?,?,?)""",
+            (patient_id, provider_id, start_s, end_s, status)
+        )
         db.commit()
         return redirect(url_for("appointments_list"))
+
     return render_template("appointment_form.html", title="New Appointment",
                            patients=patients, providers=providers, appt=None)
 
@@ -212,18 +238,41 @@ def appointments_edit(appt_id):
         return "Not found", 404
     patients = db.execute("SELECT user_id, name FROM users ORDER BY user_id").fetchall()
     providers = db.execute("SELECT provider_id, name FROM providers ORDER BY provider_id").fetchall()
+
     if request.method == "POST":
+        # ---- Validation (Commit #8) ----
         patient_id = request.form["patient_id"]
         provider_id = request.form["provider_id"]
-        start_ts = request.form["start_ts"].strip()
-        end_ts = request.form["end_ts"].strip()
-        status = request.form["status"].strip()
-        db.execute("""UPDATE appointments
-                      SET patient_id=?, provider_id=?, start_ts=?, end_ts=?, status=?
-                      WHERE appt_id=?""",
-                   (patient_id, provider_id, start_ts, end_ts, status, appt_id))
+        start_s = request.form["start_ts"].strip()
+        end_s   = request.form["end_ts"].strip()
+        status  = request.form["status"].strip().lower()
+        try:
+            start = parse_dt(start_s)
+            end   = parse_dt(end_s)
+            assert end > start, "End time must be after start time"
+            assert status in ALLOWED_STATUSES, f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}"
+        except Exception as ex:
+            flash(str(ex))
+            appt_ctx = {
+                "appt_id": appt_id,
+                "patient_id": int(patient_id),
+                "provider_id": int(provider_id),
+                "start_ts": start_s,
+                "end_ts": end_s,
+                "status": status
+            }
+            return render_template("appointment_form.html", title="Edit Appointment",
+                                   patients=patients, providers=providers, appt=appt_ctx)
+
+        db.execute(
+            """UPDATE appointments
+               SET patient_id=?, provider_id=?, start_ts=?, end_ts=?, status=?
+               WHERE appt_id=?""",
+            (patient_id, provider_id, start_s, end_s, status, appt_id)
+        )
         db.commit()
         return redirect(url_for("appointments_list"))
+
     return render_template("appointment_form.html", title="Edit Appointment",
                            patients=patients, providers=providers, appt=appt)
 
