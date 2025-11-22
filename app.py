@@ -159,6 +159,15 @@ def reports_daily():
         title="Daily Report",
         labels=labels, appts=appts, revenue=revenue, rows=data
     )
+
+@app.errorhandler(404)
+def _404(e):  # noqa: D401
+    return render_template("error_404.html", title="404"), 404
+
+@app.errorhandler(500)
+def _500(e):
+    return render_template("error_500.html", title="500"), 500
+
 # ---------- CRUD: Appointments ----------
 @app.route("/appointments")
 @login_required
