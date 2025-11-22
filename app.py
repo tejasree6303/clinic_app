@@ -1,7 +1,7 @@
 import os, sqlite3
 from datetime import datetime
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, flash, g, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, g, Response, jsonify
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required, logout_user
 )
@@ -164,6 +164,14 @@ def reports_daily():
         labels=labels, appts=appts, revenue=revenue, rows=data
     )
 
+# NEW: JSON API for daily report
+@app.route("/api/reports/daily")
+@login_required
+def api_reports_daily():
+    days = int(request.args.get("days", 14))
+    data = daily_summary(get_db(), days=days)  # [{day, appts, revenue}, ...]
+    return jsonify(data), 200
+
 # -------- Error pages --------
 @app.errorhandler(404)
 def _404(e):
@@ -225,64 +233,6 @@ def appointments_new():
         )
         db.commit()
         return redirect(url_for("appointments_list"))
-
-    return render_template("appointment_form.html", title="New Appointment",
-                           patients=patients, providers=providers, appt=None)
-
-@app.route("/appointments/<int:appt_id>/edit", methods=["GET","POST"])
-@login_required
-def appointments_edit(appt_id):
-    db = get_db()
-    appt = db.execute("SELECT * FROM appointments WHERE appt_id=?", (appt_id,)).fetchone()
-    if not appt:
-        return "Not found", 404
-    patients = db.execute("SELECT user_id, name FROM users ORDER BY user_id").fetchall()
-    providers = db.execute("SELECT provider_id, name FROM providers ORDER BY provider_id").fetchall()
-
-    if request.method == "POST":
-        # ---- Validation (Commit #8) ----
-        patient_id = request.form["patient_id"]
-        provider_id = request.form["provider_id"]
-        start_s = request.form["start_ts"].strip()
-        end_s   = request.form["end_ts"].strip()
-        status  = request.form["status"].strip().lower()
-        try:
-            start = parse_dt(start_s)
-            end   = parse_dt(end_s)
-            assert end > start, "End time must be after start time"
-            assert status in ALLOWED_STATUSES, f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}"
-        except Exception as ex:
-            flash(str(ex))
-            appt_ctx = {
-                "appt_id": appt_id,
-                "patient_id": int(patient_id),
-                "provider_id": int(provider_id),
-                "start_ts": start_s,
-                "end_ts": end_s,
-                "status": status
-            }
-            return render_template("appointment_form.html", title="Edit Appointment",
-                                   patients=patients, providers=providers, appt=appt_ctx)
-
-        db.execute(
-            """UPDATE appointments
-               SET patient_id=?, provider_id=?, start_ts=?, end_ts=?, status=?
-               WHERE appt_id=?""",
-            (patient_id, provider_id, start_s, end_s, status, appt_id)
-        )
-        db.commit()
-        return redirect(url_for("appointments_list"))
-
-    return render_template("appointment_form.html", title="Edit Appointment",
-                           patients=patients, providers=providers, appt=appt)
-
-@app.route("/appointments/<int:appt_id>/delete", methods=["POST"])
-@login_required
-def appointments_delete(appt_id):
-    db = get_db()
-    db.execute("DELETE FROM appointments WHERE appt_id=?", (appt_id,))
-    db.commit()
-    return redirect(url_for("appointments_list"))
 
 if __name__ == "__main__":
     app.run(debug=True)
